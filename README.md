@@ -39,6 +39,7 @@ teams, slack = call_many([
 
 Each answer is the text that the tool returned. A tool error raises `ToolFailed`.
 `call_each` returns a `ToolFailed` in place of each failed answer and keeps the other answers. Use it when one server can be down.
+`config_dir=` uses another Claude Code login folder (`CLAUDE_CONFIG_DIR`), with its own claude.ai connectors and MCP servers.
 
 ## Prove that no model runs
 

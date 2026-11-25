@@ -62,16 +62,17 @@ def settings_for(calls: list[Call], timeout: int, deny: list[str], model_api: st
     }
 
 
-def session(calls: list[Call], timeout: int = 120, deny: list[str] | None = None, model_api: str = NO_MODEL_API) -> list[str | ToolFailed]:
+def session(calls: list[Call], timeout: int = 120, deny: list[str] | None = None, model_api: str = NO_MODEL_API,
+            config_dir: str | None = None) -> list[str | ToolFailed]:
     """One Claude Code session that runs `calls` in parallel. Return the answers in the order of `calls`.
-    A call that failed gives a ToolFailed in its place."""
+    A call that failed gives a ToolFailed in its place. `config_dir` picks another Claude Code login (CLAUDE_CONFIG_DIR)."""
     with tempfile.NamedTemporaryFile("w", suffix=".json") as file:
         json.dump(settings_for(calls, timeout, deny or [], model_api), file)
         file.flush()
         run = subprocess.run(
             ["claude", "-p", "x", "--model", "haiku", "--settings", file.name, "--output-format", "stream-json", "--verbose", "--include-hook-events"],
             check=False, stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=timeout + 60,
-            env=os.environ | {"ANTHROPIC_BASE_URL": model_api},
+            env=os.environ | {"ANTHROPIC_BASE_URL": model_api} | ({"CLAUDE_CONFIG_DIR": config_dir} if config_dir else {}),
         )
     started: list[str] = []
     responses: dict[str, dict] = {}
@@ -105,27 +106,29 @@ def session(calls: list[Call], timeout: int = 120, deny: list[str] | None = None
     return answers
 
 
-def call_many(calls: list[Call], timeout: int = 120, deny: list[str] | None = None) -> list[str]:
+def call_many(calls: list[Call], timeout: int = 120, deny: list[str] | None = None, config_dir: str | None = None) -> list[str]:
     """Run all calls in one Claude Code session, in parallel. Return the answers in the order of `calls`.
 
     `deny` names MCP servers to turn off. Use it when a plugin and a claude.ai connector point at the same
     server: Claude Code then suppresses the plugin, and the hook finds it "not connected".
+    `config_dir` picks another Claude Code login (CLAUDE_CONFIG_DIR), with its own connectors and MCP servers.
     """
-    answers = call_each(calls, timeout, deny)
+    answers = call_each(calls, timeout, deny, config_dir)
     for answer in answers:
         if isinstance(answer, ToolFailed):
             raise answer
     return [str(answer) for answer in answers]
 
 
-def call_each(calls: list[Call], timeout: int = 120, deny: list[str] | None = None) -> list[str | ToolFailed]:
+def call_each(calls: list[Call], timeout: int = 120, deny: list[str] | None = None, config_dir: str | None = None) -> list[str | ToolFailed]:
     """Like call_many, but a call that fails gives a ToolFailed in its place and the other answers still come back.
     Use it when one server can be down, for example before its login is done."""
-    return session(calls, timeout, deny) if calls else []
+    return session(calls, timeout, deny, config_dir=config_dir) if calls else []
 
 
-def call(server: str, tool: str, input: dict | None = None, timeout: int = 120, deny: list[str] | None = None) -> str:
-    return call_many([Call(server, tool, input or {})], timeout, deny)[0]
+def call(server: str, tool: str, input: dict | None = None, timeout: int = 120, deny: list[str] | None = None,
+         config_dir: str | None = None) -> str:
+    return call_many([Call(server, tool, input or {})], timeout, deny, config_dir)[0]
 
 
 def verify(probe: Call | None = None, deny: list[str] | None = None) -> None:
