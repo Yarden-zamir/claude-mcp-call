@@ -1,0 +1,18 @@
+[project]
+name = "claude-mcp-call"
+version = "0.1.0"
+description = "Call MCP tools and claude.ai connectors through Claude Code, with no model call"
+readme = "README.md"
+license = "MIT"
+authors = [
+    { name = "Yarden Zamir", email = "dev@yarden-zamir.com" }
+]
+requires-python = ">=3.13"
+dependencies = []
+
+[project.scripts]
+claude-mcp-call = "claude_mcp_call:main"
+
+[build-system]
+requires = ["uv_build>=0.13.9,<0.14.0"]
+build-backend = "uv_build"
