@@ -26,7 +26,7 @@ The server name is the name that `claude mcp list` shows.
 From Python, as a dependency (`uv add git+https://github.com/Yarden-zamir/claude-mcp-call`):
 
 ```python
-from claude_mcp_call import Call, call, call_many
+from claude_mcp_call import Call, call, call_each, call_many
 
 channels = call("claude.ai Microsoft 365", "teams_list_channels", {"teamId": "<team id>"})
 
@@ -38,6 +38,7 @@ teams, slack = call_many([
 ```
 
 Each answer is the text that the tool returned. A tool error raises `ToolFailed`.
+`call_each` returns a `ToolFailed` in place of each failed answer and keeps the other answers. Use it when one server can be down.
 
 ## Prove that no model runs
 

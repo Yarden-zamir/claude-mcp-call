@@ -62,8 +62,9 @@ def settings_for(calls: list[Call], timeout: int, deny: list[str], model_api: st
     }
 
 
-def session(calls: list[Call], timeout: int = 120, deny: list[str] | None = None, model_api: str = NO_MODEL_API) -> list[str]:
-    """One Claude Code session that runs `calls` in parallel. Return the answers in the order of `calls`."""
+def session(calls: list[Call], timeout: int = 120, deny: list[str] | None = None, model_api: str = NO_MODEL_API) -> list[str | ToolFailed]:
+    """One Claude Code session that runs `calls` in parallel. Return the answers in the order of `calls`.
+    A call that failed gives a ToolFailed in its place."""
     with tempfile.NamedTemporaryFile("w", suffix=".json") as file:
         json.dump(settings_for(calls, timeout, deny or [], model_api), file)
         file.flush()
@@ -98,8 +99,9 @@ def session(calls: list[Call], timeout: int = 120, deny: list[str] | None = None
     for c, hook_id in zip(calls, started[1:], strict=True):
         response = responses[hook_id]
         if response["exit_code"] != 0 and not response.get("stderr", "").startswith(ANSWERED):
-            raise ToolFailed(f"{c.server}/{c.tool} {json.dumps(c.input)[:300]}: {response.get('stderr', '')[:500]}")
-        answers.append(response.get("stdout", ""))
+            answers.append(ToolFailed(f"{c.server}/{c.tool} {json.dumps(c.input)[:300]}: {response.get('stderr', '')[:500]}"))
+        else:
+            answers.append(response.get("stdout", ""))
     return answers
 
 
@@ -109,6 +111,16 @@ def call_many(calls: list[Call], timeout: int = 120, deny: list[str] | None = No
     `deny` names MCP servers to turn off. Use it when a plugin and a claude.ai connector point at the same
     server: Claude Code then suppresses the plugin, and the hook finds it "not connected".
     """
+    answers = call_each(calls, timeout, deny)
+    for answer in answers:
+        if isinstance(answer, ToolFailed):
+            raise answer
+    return [str(answer) for answer in answers]
+
+
+def call_each(calls: list[Call], timeout: int = 120, deny: list[str] | None = None) -> list[str | ToolFailed]:
+    """Like call_many, but a call that fails gives a ToolFailed in its place and the other answers still come back.
+    Use it when one server can be down, for example before its login is done."""
     return session(calls, timeout, deny) if calls else []
 
 
@@ -153,6 +165,8 @@ def verify(probe: Call | None = None, deny: list[str] | None = None) -> None:
         assert not model, f"a blocked session sent model requests: {model}"
         print(f"2. ok: a blocked session sent no model request. Other requests: {hits or 'none'}")
         if probe:
+            if isinstance(answers[0], ToolFailed):
+                raise answers[0]
             print(f"   {probe.server}/{probe.tool} answered {len(answers[0])} characters")
     finally:
         server.shutdown()
